@@ -29,12 +29,7 @@ jobs:
         uses: actions/checkout@v4
 
       # 步骤2：检出私有 keystore 仓库（推荐将 .jks 存于独立私有仓库）
-      - name: Fetch Keystore
-        uses: actions/checkout@v4
-        with:
-          repository: your-username/android-keystore  # ✅ 替换为你的私有 keystore 仓库
-          path: keystore
-          token: ${{ secrets.TOKEN }}  # 用于访问私有仓库的 PAT（需 repo 权限）
+
 
       # 步骤3：设置 Java 环境（推荐 JDK 17）
       - name: Set up JDK 17
