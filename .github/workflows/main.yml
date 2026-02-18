@@ -47,7 +47,7 @@ jobs:
       - name: Prepare Signing Configuration
         run: |
           # 复制 keystore 到 app 目录
-          cp keystore/magic-key.jks app/
+          # cp keystore/magic-key.jks app/
           # 写入签名配置到 gradle.properties
           echo "android.signingConfig.storeFile=../app/magic-key.jks" >> gradle.properties
           echo "android.signingConfig.storePassword=${{ secrets.KEY_STORE_PASSWORD }}" >> gradle.properties
