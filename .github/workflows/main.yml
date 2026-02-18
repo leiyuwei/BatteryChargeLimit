@@ -1,9 +1,24 @@
-name: Build & Release Android APK
+name: 🛠️ Manual Build & Release Android APK
 
 on:
-  push:
-    tags:
-      - 'v*'  # 只有打 tag（如 v1.0.0）时触发构建，适合正式发布
+  workflow_dispatch:  # 👈 关键：改为手动触发
+    inputs:
+      versionCode:
+        description: 'APK Version Code (e.g., 101)'
+        required: true
+        default: '101'
+      versionName:
+        description: 'APK Version Name (e.g., 1.0.1)'
+        required: true
+        default: '1.0.1'
+      buildType:
+        description: 'Build Type (release or debug)'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - debug
 
 jobs:
   build-and-release:
@@ -13,13 +28,13 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 步骤2：检出私有 keystore 仓库（推荐将 .jks 文件存于独立私有仓库）
+      # 步骤2：检出私有 keystore 仓库（推荐将 .jks 存于独立私有仓库）
       - name: Fetch Keystore
         uses: actions/checkout@v4
         with:
-          repository: your-username/android-keystore  # 替换为你的私有 keystore 仓库
+          repository: your-username/android-keystore  # ✅ 替换为你的私有 keystore 仓库
           path: keystore
-          token: ${{ secrets.TOKEN }}  # 用于访问私有仓库的 Personal Access Token
+          token: ${{ secrets.TOKEN }}  # 用于访问私有仓库的 PAT（需 repo 权限）
 
       # 步骤3：设置 Java 环境（推荐 JDK 17）
       - name: Set up JDK 17
@@ -27,39 +42,52 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle  # 缓存 Gradle 依赖，加速后续构建
+          cache: gradle  # 缓存 Gradle 依赖，加速构建
 
       # 步骤4：使 gradlew 可执行
       - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
 
-      # 步骤5：复制 keystore 到项目目录，并写入签名配置
+      # 步骤5：准备签名配置（从 gradle.properties 读取）
       - name: Prepare Signing Configuration
         run: |
-          # 复制 keystore 文件到 app 目录
+          # 复制 keystore 到 app 目录
           cp keystore/magic-key.jks app/
-          # 生成 gradle.properties 中的签名配置（用于 build.gradle 读取）
+          # 写入签名配置到 gradle.properties
           echo "android.signingConfig.storeFile=../app/magic-key.jks" >> gradle.properties
           echo "android.signingConfig.storePassword=${{ secrets.KEY_STORE_PASSWORD }}" >> gradle.properties
           echo "android.signingConfig.keyAlias=${{ secrets.ALIAS }}" >> gradle.properties
           echo "android.signingConfig.keyPassword=${{ secrets.KEY_PASSWORD }}" >> gradle.properties
+        env:
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      # 步骤6：清理构建缓存（可选，确保干净构建）
+      # 步骤6：更新版本号（可选，根据输入动态修改）
+      - name: Update Version in build.gradle
+        run: |
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.event.inputs.versionCode }}/" app/build.gradle
+          sed -i "s/versionName '[^']*'/versionName '${{ github.event.inputs.versionName }}'/" app/build.gradle
+        shell: bash
+
+      # 步骤7：清理构建缓存
       - name: Clean Gradle Build
         run: ./gradlew clean
 
-      # 步骤7：构建 Release APK
-      - name: Build Release APK
-        run: ./gradlew assembleRelease -x lint --info
-        env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      # 步骤8：构建 APK（根据输入选择 buildType）
+      - name: Build APK
+        run: ./gradlew assemble${{ github.event.inputs.buildType.capitalize() }} -x lint --info
 
-      # 步骤8：上传 APK 到 GitHub Releases（自动创建 Release 并附加文件）
+      # 步骤9：上传 APK 到 GitHub Releases（自动创建 Release）
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v1
         with:
-          files: app/build/outputs/apk/release/*.apk
+          files: app/build/outputs/apk/${{ github.event.inputs.buildType }}/*.apk
+          tag_name: ${{ github.event.inputs.versionName }}
+          target_commitish: main
+          name: Release ${{ github.event.inputs.versionName }}
+          body: |
+            Auto-generated release for version `${{ github.event.inputs.versionName }}` (`v${{ github.event.inputs.versionCode }}`)
+            Built via manual GitHub Actions trigger.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
