@@ -75,8 +75,15 @@ jobs:
         run: ./gradlew clean
 
       # 步骤8：构建 APK（根据输入选择 buildType）
+      - name: Set Build Type Capitalized
+        id: set-build-type
+        run: |
+          BUILD_TYPE="${{ github.event.inputs.buildType }}"
+          CAPITALIZED=$(echo "${BUILD_TYPE:0:1}" | tr '[:lower:]' '[:upper:]')$(echo "${BUILD_TYPE:1}")
+          echo "BUILD_TYPE_CAPITALIZED=$CAPITALIZED" >> $GITHUB_ENV
+
       - name: Build APK
-        run: ./gradlew assemble${{ github.event.inputs.buildType.capitalize() }} -x lint --info
+        run: ./gradlew assemble${{ env.BUILD_TYPE_CAPITALIZED }} -x lint --info
 
       # 步骤9：上传 APK 到 GitHub Releases（自动创建 Release）
       - name: Create Release and Upload APK
